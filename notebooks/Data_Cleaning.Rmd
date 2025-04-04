@@ -1,0 +1,221 @@
+---
+title: "Baysesian Network on Casual Inference on femsmoke dataset"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+
+```{r}
+library(faraway)
+library(bnlearn)
+library(dplyr)
+```
+
+
+directed acyclic graph (DAG) representation
+
+femsmoke is a data frame with 28 observations on the following 4 variables. It records female smokers and non-smokers, their age group, and whether the subjects were dead or still alive after 20 years.
+
+y- number of observed count for given combination
+
+smoker-a factor with levels yes no
+
+dead-a factor with levels yes no
+
+age-a factor with agegroup levels 18-24 25-34 35-44 45-54 55-64 65-74 75+
+
+Death is the targeted varibale. We are interested in finding the casual relationship between death and smoking and age.
+
+
+```{r}
+femsmoke
+```
+
+
+```{r}
+femsmoke <- as_tibble(femsmoke) %>%
+  print(n = Inf)
+```
+
+When we only study only on smoke~dead, we will find that non-smokers have a higher rate of death than smokers, which would be counter our intution and fact that smoking is bad for health.This is because smoke is confounded with age. Age also has a siginificant influence on death. Younger people smoke more than elder people and younger people are more likely to live when the data is gathered.
+
+
+```{r}
+ct <- xtabs(y ~ smoker + dead, data = femsmoke)
+```
+
+
+```{r}
+ct1 <- xtabs(y ~ age + smoker, data = femsmoke)
+```
+
+
+```{r}
+prop.table(ct1, 1)
+```
+
+
+```{r}
+ct2 <- xtabs(y ~ smoker+ age, data = femsmoke)
+```
+
+```{r}
+ct2
+```
+
+
+```{r}
+prop.table(ct2, 2)
+```
+
+
+```{r}
+prop.table(ct, 1)
+```
+
+Next,we will add age variable:
+
+```{r}
+xtabs(y ~age, data = femsmoke)
+```
+
+```{r}
+prop.table(xtabs(y ~age, data = femsmoke))
+```
+
+
+
+```{r}
+prop.table(xtabs(y ~ smoker + age, data = femsmoke), 2)
+```
+
+
+
+
+
+```{r}
+prop.table(xtabs(y ~ dead+smoker, data = femsmoke), 2)
+```
+
+
+
+```{r}
+library(tigerstats)
+xtabs(y ~dead + smoker + age, data = femsmoke) %>%prop.table(c(3,2)) %>% round(2)
+```
+
+
+
+
+
+
+
+Bayesian Network
+
+Knowledge:Age can influece whether you smoke or not but smoke cannot influence your age. age can influence death. Smoke can influence death. 
+
+
+If we ignore age influence on death when design casual diagram:
+```{r}
+dag <- empty.graph(nodes = c("A","D","S"))
+arc.set <- matrix(c("A","S",
+                    "S","D"),
+                  byrow = TRUE,ncol = 2,dimnames=list(NULL,c("from","to")))
+
+arcs(dag) <- arc.set
+A.lv <- c("18-24","25-34","35-44","45-54","55-64","65-74","75+")
+S.lv <- c("yes","no")
+D.lv <- c("yes","no")
+A.prob <- array(c(0.09,0.21,0.18,0.16,0.18,0.13,0.05),dim=7,dimnames=list(A=A.lv))
+S.prob <- array(c(0.47, 0.53, 0.44, 0.56, 0.47, 0.53, 0.63, 0.37, 0.49, 0.51, 0.22, 0.78, 0.17, 0.83),dim=c(2,7),dimnames = list(S=S.lv,A=A.lv))
+D.prob <- array(c(0.24,0.76,0.31,0.69),dim=c(2,2),dimnames = list(D=D.lv,S=S.lv))
+
+cpt=list(D=D.prob,S=S.prob,A=A.prob)
+
+bn <-custom.fit(dag, cpt)
+```
+
+```{r}
+graphviz.plot(dag)
+```
+
+
+```{r}
+Smoked <- mutilated(bn, list(S = "yes"))
+Non_Smoked <- mutilated(bn, list(S = "no"))
+```
+
+```{r}
+Smoked_Death <- mean(rbn(Smoked,50000)["D"]=="yes")
+Non_Smoked_Death <- mean(rbn(Non_Smoked,50000)["D"]=="yes")
+Smoked_Death-Non_Smoked_Death
+```
+
+When using knowledge building diagram, if we ignore confounding effect, we can get the casual relationship wrong.
+
+
+
+
+```{r}
+alt.dag <- empty.graph(nodes = c("A","D","S"))
+arc.set <- matrix(c( "A","S",
+                     "A","D",
+                    "S","D"),
+                  byrow = TRUE,ncol = 2,dimnames=list(NULL,c("from","to")))
+
+arcs(alt.dag) <- arc.set
+```
+
+```{r}
+graphviz.plot(alt.dag)
+```
+
+```{r}
+A.lv <- c("18-24","25-34","35-44","45-54","55-64","65-74","75+")
+S.lv <- c("yes","no")
+D.lv <- c("yes","no")
+A.prob <- array(c(0.09,0.21,0.18,0.16,0.18,0.13,0.05),dim=7,dimnames=list(A=A.lv))
+S.prob <- array(c(0.47, 0.53, 0.44, 0.56, 0.47, 0.53, 0.63, 0.37, 0.49, 0.51, 0.22, 0.78, 0.17, 0.83),dim=c(2,7),dimnames = list(S=S.lv,A=A.lv))
+D.prob <- array(c(0.04,0.96,0.02,0.98,
+                  0.02,0.98,0.03,0.97,
+                  0.13,0.87,0.06,0.94,
+                  0.21,0.79,0.15,0.85,
+                  0.44,0.56,0.33,0.67,
+                  0.81,0.19,0.78,0.22,
+                  1,0,1,0),dim=c(2,2,7),dimnames = list(D=D.lv,S=S.lv,A=A.lv))
+cpt=list(D=D.prob,A=A.prob,S=S.prob)
+bn1<-custom.fit(alt.dag,cpt)
+```
+
+```{r}
+Smoked <- mutilated(bn1, list(S = "yes"))
+Non_Smoked <- mutilated(bn1, list(S = "no"))
+Smoked_Death <- mean(rbn(Smoked,50000)["D"]=="yes")
+Non_Smoked_Death <- mean(rbn(Non_Smoked,50000)["D"]=="yes")
+Smoked_Death-Non_Smoked_Death
+```
+
+
+Smoke causes death increase 5%
+
+
+```{r}
+table(Cars93$Type, Cars93$Origin)
+```
+
+
+## transfer femsmoke to each record of a patient so that the data can be put into Agenarisk
+
+```{r}
+tab=xtabs(y ~dead + smoker + age, data = femsmoke)
+fem=setNames(tidyr::uncount(as.data.frame(tab), Freq), c("dead", "smoker","age"))
+```
+
+
+```{r}
+write.csv(fem,"~/Downloads/fem.csv",row.names=FALSE)
+```
+
