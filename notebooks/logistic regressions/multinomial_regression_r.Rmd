@@ -1,0 +1,29 @@
+---
+title: "Multinomial Regression"
+output: html_document
+date: '2022-10-10'
+---
+
+```{r}
+diabetes_indicators_2022 <- read.csv("~/Downloads/diabetes_indicators_2022.csv", header=TRUE)
+```
+
+
+```{r}
+library(nnet)
+library(stargazer)
+```
+
+```{r}
+#cholcheck
+multinomModel <- multinom(factor(Diabetes_012)~Age+factor(HighBP)+factor(BMI)+factor(Smoker)+factor(Stroke)+factor(HeartDiseaseorAttack)+factor(PhysActivity)+factor(Fruits)+factor(Veggies)+factor(Sex)+factor(HvyAlcoholConsump) , data=diabetes_indicators_2022) 
+```
+
+
+```{r}
+ stargazer(multinomModel,type="text", digits=5)
+```
+
+
+
+
